@@ -1,0 +1,41 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [{
+          "type": "command",
+          "command": "bash hooks/session-start.sh",
+          "statusMessage": "🧟 Loading brain..."
+        }]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "command": "bash hooks/on-edit.sh"
+        }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "command": "bash hooks/on-commit.sh"
+        }]
+      }
+    ],
+    "UserPromptSubmit": [],
+    "Stop": [
+      {
+        "hooks": [{
+          "type": "command",
+          "command": "bash hooks/on-stop.sh"
+        }]
+      }
+    ]
+  }
+}

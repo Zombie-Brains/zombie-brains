@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "bash hooks/session-start.sh"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "bash hooks/on-commit.sh",
+        "matcher": "git commit"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "bash hooks/on-edit.sh"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": "bash hooks/on-error.sh"
+      }
+    ],
+    "preCompact": [
+      {
+        "command": "bash hooks/pre-compact.sh"
+      }
+    ],
+    "stop": [
+      {
+        "command": "bash hooks/on-stop.sh"
+      }
+    ]
+  }
+}

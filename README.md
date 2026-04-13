@@ -1,106 +1,129 @@
-# Zombie Brains — Claude Code Hooks
+# Zombie Brains — Deterministic Memory Hooks
 
-**Deterministic memory for Claude Code.** These hooks automatically store decisions, recall context, and build your brain — without relying on the AI to remember.
+**Your AI coding agent forgets everything between sessions. These hooks fix that — deterministically.**
 
-## What it does
+One set of hook scripts. Three platform configs. Every commit, every error, every decision — stored automatically without relying on the AI to remember.
 
-| Hook | When | What happens |
-|------|------|-------------|
-| **Session Start** | Every session | Auto-loads your brain, injects project context |
-| **On Commit** | `git commit` | Stores commit message + files changed as a memory |
-| **On Edit** | File write/edit | Recalls brain context about the file being changed |
+## Supported Platforms
+
+| Platform | Config File | Status |
+|----------|------------|--------|
+| **Claude Code** | `.claude/settings.json` | ✅ Full support (12+ events) |
+| **OpenAI Codex** | `.codex/hooks.json` | ✅ Supported (PostToolUse: Bash only) |
+| **Cursor** | `.cursor/hooks.json` | ✅ Supported (15+ events) |
+
+## What the Hooks Do
+
+| Hook | Trigger | What happens |
+|------|---------|-------------|
+| **Session Start** | Session opens | Auto-loads your brain, injects context — Claude/Codex/Cursor starts briefed |
+| **On Commit** | `git commit` | Stores commit message + changed files as a memory |
+| **On Edit** | File write/edit | Searches brain for context about the file, injects silently |
 | **On Error** | Tool failure | Stores errors as critical "never again" memories |
-| **On Stop** | Claude finishes | Logs session summary with recent git activity |
-| **Pre-Compact** | Before compaction | Re-injects critical memories to survive long sessions |
+| **On Stop** | Agent finishes | Logs session summary with git activity (async) |
+| **Pre-Compact** | Before compaction | Re-injects critical memories so they survive long sessions |
 
 ## Install
 
-### 1. Get your API key
+### 1. Get your Zombie Brains API key
 
-Sign up at [zombie.codes](https://zombie.codes) and get your API key from the MCP connector setup.
+Sign up at [zombie.codes](https://zombie.codes) and get your API key.
 
 ### 2. Set your API key
 
 ```bash
-# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
+# Add to ~/.bashrc, ~/.zshrc, or ~/.config/fish/config.fish
 export ZOMBIE_API_KEY="your-api-key-here"
 ```
 
-### 3. Copy hooks to your project
+### 3. Copy to your project
 
 ```bash
-# Clone this repo
-git clone https://github.com/Zombie-Brains/zombie-brains-skill.git /tmp/zombie-hooks
+git clone https://github.com/Zombie-Brains/zombie-brains.git /tmp/zombie-brains
 
-# Copy hooks into your project
-cp -r /tmp/zombie-hooks/.claude/hooks your-project/.claude/hooks
+# Copy the shared hook scripts
+cp -r /tmp/zombie-brains/hooks your-project/hooks
 
-# Merge settings into your existing .claude/settings.json
-# (or copy if you don't have one)
-cp /tmp/zombie-hooks/.claude/settings.json your-project/.claude/settings.json
+# Then copy YOUR platform's config:
+
+# Claude Code
+cp -r /tmp/zombie-brains/.claude your-project/.claude
+
+# OpenAI Codex
+cp -r /tmp/zombie-brains/.codex your-project/.codex
+
+# Cursor
+cp -r /tmp/zombie-brains/.cursor your-project/.cursor
 ```
 
-### 4. Install globally (all projects)
+### 4. Or install globally
 
 ```bash
-# Copy hooks to global Claude Code config
-cp -r /tmp/zombie-hooks/.claude/hooks ~/.claude/hooks
+# Claude Code (all projects)
+cp -r /tmp/zombie-brains/hooks ~/.claude/hooks
+cp /tmp/zombie-brains/.claude/settings.json ~/.claude/settings.json
 
-# Merge settings into ~/.claude/settings.json
+# Codex (all projects)
+cp -r /tmp/zombie-brains/hooks ~/.codex/hooks
+cp /tmp/zombie-brains/.codex/hooks.json ~/.codex/hooks.json
+
+# Cursor (all projects)
+cp -r /tmp/zombie-brains/hooks ~/.cursor/hooks
+cp /tmp/zombie-brains/.cursor/hooks.json ~/.cursor/hooks.json
 ```
 
 ## Requirements
 
-- `curl` and `jq` (pre-installed on macOS, `apt install jq` on Linux)
-- A Zombie Brains account with an API key
-- Claude Code
+- `curl` and `jq` (pre-installed on macOS; `apt install jq` on Linux)
+- A [Zombie Brains](https://zombie.codes) account with an API key
+- Any supported AI coding agent
 
-## How it works
+## How It Works
 
 **The AI doesn't decide to remember — the hooks guarantee it.**
 
-When you `git commit`, the on-commit hook fires deterministically and stores the commit as a memory. When Claude edits a file, the on-edit hook searches your brain for relevant context about that file and injects it silently. When a tool fails, the error is stored as a critical-salience memory that surfaces every time anyone works on that module.
-
-This solves the core UX problem: tool descriptions can *suggest* the AI should store things, but hooks *guarantee* it happens.
-
-### Hook → API Flow
-
 ```
-Claude Code event fires
+Agent event fires (commit, edit, error, session start/end)
   → Hook script reads event JSON from stdin
-  → Script extracts relevant data (commit msg, file path, error)
-  → Script calls Zombie REST API (POST /v1/memory/add or GET /v1/memory/search)
-  → API stores memory or returns relevant context
-  → Script returns additionalContext (injected into Claude's context)
+  → Extracts relevant data (commit msg, file path, error)
+  → Calls Zombie REST API via curl
+  → Returns additionalContext (injected into agent's context)
+```
+
+All three platforms use the same pattern: JSON on stdin → bash script → JSON on stdout. The shared `hooks/` scripts work identically across Claude Code, Codex, and Cursor.
+
+## Also Included
+
+### SKILL.md
+
+The behavioral guide that teaches your AI agent the Zombie Brains core loop:
+
+1. **Load Brain** — always first
+2. **Search Memory** — before making decisions
+3. **Add Memory** — store decisions reflexively
+4. **Log Session** — capture handoff notes
+
+Install as a skill:
+```bash
+# Claude Code
+mkdir -p ~/.claude/skills/zombie-brains
+cp SKILL.md ~/.claude/skills/zombie-brains/SKILL.md
+
+# Codex
+mkdir -p ~/.codex/skills/zombie-brains
+cp SKILL.md ~/.codex/skills/zombie-brains/SKILL.md
 ```
 
 ## Customization
 
-Edit `.claude/settings.json` to:
-
-- **Disable a hook**: Remove it from the settings
-- **Change API URL**: Set `ZOMBIE_API_URL` env var (default: `https://mcp.zombie.codes`)
-- **Add test hooks**: Add a PostToolUse matcher for Bash that filters `npm test|pytest|jest`
-
-## Also included
-
-### SKILL.md
-
-The behavioral guide that teaches Claude Code the Zombie Brains core loop:
-1. Load Brain → always first
-2. Search Memory → before making decisions
-3. Add Memory → store decisions reflexively
-4. Log Session → capture handoff notes
-
-Install as a Claude Code skill:
-```bash
-cp SKILL.md ~/.claude/skills/zombie-brains/SKILL.md
-```
+- **Disable a hook:** Remove it from your platform's config file
+- **Custom API URL:** `export ZOMBIE_API_URL="https://your-instance.com"`
+- **Add test hooks:** Add a PostToolUse matcher for `npm test|pytest|jest`
 
 ## Links
 
-- [Zombie Brains](https://zombie.codes) — Sign up
-- [Documentation](https://mcp.zombie.codes/docs) — Full API docs
+- [Zombie Brains](https://zombie.codes) — The Cognitive OS for AI
+- [Documentation](https://mcp.zombie.codes/docs)
 - [MCP Connector](https://mcp.zombie.codes) — Connect via Claude.ai
 
 ---
