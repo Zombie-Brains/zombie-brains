@@ -1,82 +1,108 @@
-# Zombie Brains — Agent Skill
+# Zombie Brains — Claude Code Hooks
 
-Persistent structured memory for AI coding sessions. This skill teaches Claude (and other AI agents) how to use the [Zombie Brains](https://zombie.codes) MCP server for continuous memory across sessions.
+**Deterministic memory for Claude Code.** These hooks automatically store decisions, recall context, and build your brain — without relying on the AI to remember.
 
-## What This Skill Does
+## What it does
 
-When installed, your AI agent automatically:
-- **Loads memory** at the start of every session — picks up where you left off
-- **Stores decisions, constraints, and preferences** as you work — no manual note-taking
-- **Recalls relevant context** before making recommendations — prevents contradictions
-- **Logs session summaries** so future sessions start informed
+| Hook | When | What happens |
+|------|------|-------------|
+| **Session Start** | Every session | Auto-loads your brain, injects project context |
+| **On Commit** | `git commit` | Stores commit message + files changed as a memory |
+| **On Edit** | File write/edit | Recalls brain context about the file being changed |
+| **On Error** | Tool failure | Stores errors as critical "never again" memories |
+| **On Stop** | Claude finishes | Logs session summary with recent git activity |
+| **Pre-Compact** | Before compaction | Re-injects critical memories to survive long sessions |
 
-## Installation
+## Install
 
-### Claude Code
+### 1. Get your API key
 
-Install via the plugin marketplace:
-```
-/plugin marketplace add robertsellman-code/zombie-brains-skill
-```
+Sign up at [zombie.codes](https://zombie.codes) and get your API key from the MCP connector setup.
 
-Or install manually:
+### 2. Set your API key
+
 ```bash
-cp -r zombie-brains-skill ~/.claude/skills/zombie-brains
+# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
+export ZOMBIE_API_KEY="your-api-key-here"
 ```
 
-### Other Agents
+### 3. Copy hooks to your project
 
-Copy the `SKILL.md` file to your agent's skills directory:
+```bash
+# Clone this repo
+git clone https://github.com/Zombie-Brains/zombie-brains-skill.git /tmp/zombie-hooks
 
-| Agent | Skills Directory |
-|-------|-----------------|
-| Claude Code | `~/.claude/skills/` |
-| VS Code / GitHub Copilot | `~/.copilot/skills/` |
-| Gemini CLI | `~/.gemini/skills/` |
-| Cline | `~/.cline/skills/` |
-| Goose | `~/.config/goose/skills/` |
-| Codex | `~/.codex/skills/` |
-| Cursor | `~/.cursor/skills/` |
+# Copy hooks into your project
+cp -r /tmp/zombie-hooks/.claude/hooks your-project/.claude/hooks
 
-## Prerequisites
-
-You need the Zombie Brains MCP server connected. Add it as a connector in your AI client:
-
-**MCP Server URL:** `https://mcp.zombie.codes`
-
-Or add to your MCP config:
-```json
-{
-  "mcpServers": {
-    "zombie": {
-      "url": "https://mcp.zombie.codes"
-    }
-  }
-}
+# Merge settings into your existing .claude/settings.json
+# (or copy if you don't have one)
+cp /tmp/zombie-hooks/.claude/settings.json your-project/.claude/settings.json
 ```
 
-Sign up at [zombie.codes](https://zombie.codes) — free tier includes 1 brain, 5,000 memories, and all features.
+### 4. Install globally (all projects)
 
-## What's in the Skill
+```bash
+# Copy hooks to global Claude Code config
+cp -r /tmp/zombie-hooks/.claude/hooks ~/.claude/hooks
 
-The `SKILL.md` contains behavioral instructions that teach your AI agent:
+# Merge settings into ~/.claude/settings.json
+```
 
-- **Core loop**: Load → Search → Store → Log
-- **What to remember**: Decisions, constraints, preferences, rejected alternatives, observations
-- **What NOT to remember**: Credentials, priority rankings, status snapshots
-- **Granularity rules**: One concept per memory, self-contained
-- **When to recall**: Before decisions, when topics arise, when uncertain
-- **Context degradation**: How to compensate as conversations get long
-- **Team brains**: Multi-brain routing with descriptions and routing rules
-- **Tools reference**: All 9 MCP tools with usage guidance
+## Requirements
+
+- `curl` and `jq` (pre-installed on macOS, `apt install jq` on Linux)
+- A Zombie Brains account with an API key
+- Claude Code
+
+## How it works
+
+**The AI doesn't decide to remember — the hooks guarantee it.**
+
+When you `git commit`, the on-commit hook fires deterministically and stores the commit as a memory. When Claude edits a file, the on-edit hook searches your brain for relevant context about that file and injects it silently. When a tool fails, the error is stored as a critical-salience memory that surfaces every time anyone works on that module.
+
+This solves the core UX problem: tool descriptions can *suggest* the AI should store things, but hooks *guarantee* it happens.
+
+### Hook → API Flow
+
+```
+Claude Code event fires
+  → Hook script reads event JSON from stdin
+  → Script extracts relevant data (commit msg, file path, error)
+  → Script calls Zombie REST API (POST /v1/memory/add or GET /v1/memory/search)
+  → API stores memory or returns relevant context
+  → Script returns additionalContext (injected into Claude's context)
+```
+
+## Customization
+
+Edit `.claude/settings.json` to:
+
+- **Disable a hook**: Remove it from the settings
+- **Change API URL**: Set `ZOMBIE_API_URL` env var (default: `https://mcp.zombie.codes`)
+- **Add test hooks**: Add a PostToolUse matcher for Bash that filters `npm test|pytest|jest`
+
+## Also included
+
+### SKILL.md
+
+The behavioral guide that teaches Claude Code the Zombie Brains core loop:
+1. Load Brain → always first
+2. Search Memory → before making decisions
+3. Add Memory → store decisions reflexively
+4. Log Session → capture handoff notes
+
+Install as a Claude Code skill:
+```bash
+cp SKILL.md ~/.claude/skills/zombie-brains/SKILL.md
+```
 
 ## Links
 
-- **Product**: [zombie.codes](https://zombie.codes)
-- **Documentation**: [mcp.zombie.codes/docs](https://mcp.zombie.codes/docs)
-- **Full Skill Guide**: [mcp.zombie.codes/skill](https://mcp.zombie.codes/skill)
-- **MCP Server**: [mcp.zombie.codes](https://mcp.zombie.codes)
+- [Zombie Brains](https://zombie.codes) — Sign up
+- [Documentation](https://mcp.zombie.codes/docs) — Full API docs
+- [MCP Connector](https://mcp.zombie.codes) — Connect via Claude.ai
 
-## License
+---
 
-MIT
+*Context that won't stay dead.* 🧟
