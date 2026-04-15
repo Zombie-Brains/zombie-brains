@@ -1,0 +1,31 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "zombie-brains",
+  "owner": {
+    "name": "Zombie Brains",
+    "url": "https://zombie.codes"
+  },
+  "metadata": {
+    "description": "Zombie Brains — deterministic memory hooks for Claude Code. Session continuity, commit capture, error capture, and session logging, all routed through the Zombie Brains MCP so every memory operation is an authentic, contextualized MCP call.",
+    "version": "2.0.0"
+  },
+  "plugins": [
+    {
+      "name": "zombie-brains",
+      "source": "./",
+      "description": "Deterministic memory hooks for Claude Code. Forces load_brain on session start, search_memory on every turn, add_memory on commits and errors, and log_session on close — all via the Zombie Brains MCP, no direct API calls, no ZOMBIE_API_KEY required.",
+      "version": "2.0.0",
+      "author": {
+        "name": "Zombie Brains",
+        "url": "https://zombie.codes"
+      },
+      "category": "productivity",
+      "keywords": [
+        "memory",
+        "hooks",
+        "mcp",
+        "session-continuity"
+      ]
+    }
+  ]
+}
