@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Zombie Brains — UserPromptSubmit hook
 #
-# Fires on every user message. Searches for relevant context, then
-# provides criteria for when to store a memory. The search is the only
-# mandatory step — memory storage is left to the AI's honest judgment
-# guided by the criteria below. Over-storage is worse than under-storage.
+# Fires on every user message. Search is mandatory — always check the
+# brain before responding. Memory storage is evaluated HONESTLY based
+# on whether a real user would expect this exchange to be remembered.
 
 set -euo pipefail
 
@@ -12,13 +11,14 @@ HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=./lib/inject.sh
 source "${HOOK_DIR}/lib/inject.sh"
 
-emit_silent_protocol "PER-TURN CONTEXT + MEMORY GUIDANCE" "$(cat <<'EOF'
+emit_silent_protocol "PER-TURN CONTEXT + MEMORY" "$(cat <<'EOF'
 The user has just sent a message.
 
-SEARCH (do this first):
+SEARCH (required — do this every turn):
 Call search_memory for any topic in the user message that might have
 stored context. Formulate the query HONESTLY — pull the actual subject
-from the user words and search specifically.
+from the user words and search specifically. The brain may already know
+something relevant. Trust the brain over your working memory.
 
 If the results contain contradictory memories, reconcile them:
   - If the server has annotated a reconciliation.superseded[] block,
@@ -26,30 +26,33 @@ If the results contain contradictory memories, reconcile them:
     authoritative.
   - Otherwise, sort by created_at and trust the newer.
 
-MEMORY GUIDANCE (use your judgment):
-As you work through this turn, here are the criteria for when storing
-a memory is warranted. You do not need to store on every turn — only
-when something genuinely worth preserving comes up:
+MEMORY (required to evaluate — not required to store):
+After this turn, you are REQUIRED to HONESTLY evaluate whether a real
+user would expect this exchange to be remembered in future sessions.
+Put yourself in the user position: if you came back tomorrow and the
+AI had forgotten this, would you be frustrated?
 
-  Worth storing:
-  • A decision, preference, constraint, or rejected alternative
-  • A correction of you, or explicit validation of a previous choice
-  • A new fact about the user, project, or codebase not already in the brain
-  • An insight, pattern, or realization
-  • An unresolved question or open thread worth tracking
-  • An existing memory that needs enrichment or correction
+HONESTLY ask: would a reasonable person expect this to be remembered?
 
-  Not worth storing:
-  • Procedural exchanges ("run this command", "show me the file")
+  YES — store it:
+  • They made a decision or expressed a preference
+  • They corrected you or validated a previous approach
+  • They shared a fact about themselves, their project, or their goals
+  • An insight or realization came up that changes future work
+  • They asked you to remember something (explicitly or implicitly)
+  • A question was left unresolved that should be tracked
+
+  NO — skip it:
+  • Routine back-and-forth ("run this", "show me that", "yes do it")
   • Information already in the brain
-  • Ephemeral working state
-  • Turns where nothing new was learned
+  • Ephemeral working state that has no future value
+  • You are uncertain — and HONESTLY, the exchange was forgettable
 
-If you do store, use the full psychometric battery and answer every
-property HONESTLY. A genuine 0.4 confidence is more valuable than an
-inflated 0.9. Do not store just to be safe — over-storage corrupts
-training data and drifts quality. Missing a forgettable turn is fine.
+If you store, use the full psychometric battery. Answer every property
+HONESTLY. A genuine 0.4 confidence is more valuable than an inflated
+0.9. Never store just to be safe — over-storage with inflated scores
+is worse than missing a forgettable turn.
 
-Now respond to the user message.
+Respond to the user message.
 EOF
 )"
