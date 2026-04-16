@@ -97,6 +97,13 @@ When the user has multiple brains, read each brain's `description` and `routing_
 - A personal preference → personal brain (omit `target_brain_id`)
 - A legal constraint → brain with description "Legal, compliance, contracts"
 
+**NEVER guess a brain UUID.** Brain IDs are random UUIDs — there is no way to derive one from the brain's name. If you need `target_brain_id` and don't have the exact UUID in active context (from a recent `load_brain` response), you have two options:
+
+1. Call `load_brain` again to refresh `accessible_brains[]` — each entry has `id`, `name`, `description`, and `routing_rules`. Pick the right one by matching `description` to the subject.
+2. Call `manage({action: "list_brains"})` for the same information.
+
+Never construct a UUID from memory. Never pass a brain name as `target_brain_id`. The server rejects invalid UUIDs, and inventing a "plausible-looking" UUID will either fail loudly or — worse — land in a random brain you don't control. One extra tool call to verify the ID is always cheaper than a memory written to the wrong place.
+
 Routing rules are user-defined via `configure_brain`. Read and respect them. When in doubt, store in the personal brain and flag the ambiguity in your response.
 
 ---
