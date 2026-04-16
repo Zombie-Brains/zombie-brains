@@ -1,6 +1,6 @@
 ---
 name: zombie-brains
-description: Persistent memory philosophy and reconciliation rules for Claude when working with the Zombie Brains MCP. Use whenever a session touches stored memory, brain recall, or session continuity. Read alongside the Zombie Brains MCP tool descriptions — this skill covers philosophy and cross-tool patterns; the MCP owns per-tool usage.
+description: Persistent memory philosophy, reconciliation rules, and orchestration guide for building with Zombie Brains. Use whenever a session touches stored memory, brain recall, session continuity, OR when the user wants to build agents, brains, tools, or permission sets. Covers memory philosophy (Rules 1-8) and the wizard pattern for novice users who describe what they want in plain language.
 ---
 
 # Zombie Brains — Persistent Memory Philosophy
@@ -98,6 +98,158 @@ When the user has multiple brains, read each brain's `description` and `routing_
 - A legal constraint → brain with description "Legal, compliance, contracts"
 
 Routing rules are user-defined via `configure_brain`. Read and respect them. When in doubt, store in the personal brain and flag the ambiguity in your response.
+
+---
+
+# Building with Zombie Brains — Orchestration Guide
+
+Everything above is the memory philosophy. Everything below is for when the user wants to BUILD — create agents, assign brains, wire tools, set up teams. The philosophy rules still apply during builds (especially HONESTLY, Rule 1).
+
+## The cardinal rule
+
+**Never ask the user primitive-level questions.** Do not say *"should I create an agent or just a brain?"* — the user does not know what those words mean. Ask them what they want in plain English, then translate internally.
+
+Ask: *"What should this AI know, what should it be able to do, and who else needs to use it?"*
+
+Build the chain silently. Show them the completed result, not the construction steps.
+
+## The four primitives
+
+Everything in Zombie Brains reduces to four things. Everything else is an attribute of Brain.
+
+| Primitive | What it is | Minimum required fields | Depends on |
+|---|---|---|---|
+| **Brain** | Scoped knowledge container (memories, core knowledge, skills, members, routes) | name, description, routing_rules | nothing — standalone |
+| **Agent** | Named persona with its own MCP URL and API key | name, at least 1 brain, permission set or tool_permissions | at least 1 Brain |
+| **Tool** | Serverless JavaScript function OR MCP relay connection | name, code (or mcp_relay_config) | usually a Variable for credentials |
+| **Variable** | Encrypted config/secret, scoped to org/permission_set/brain/agent | name, value, scope | nothing — leaf dependency |
+
+## Vocabulary translation
+
+When the user says one of these, map it to the right primitive chain:
+
+| User says | You build |
+|---|---|
+| *"I want an AI that knows about X"* | Brain + memories |
+| *"It should behave a certain way"* | Core knowledge (for rules) OR Skill (for style/process) |
+| *"It needs to do X in [external system]"* | Tool (serverless JS with fetch) + Variable (API key) |
+| *"My team should use it"* | Team brain + invite members |
+| *"Make it remember our conversations"* | This is already what Zombie Brains does — just set up a brain |
+| *"Build me an assistant for X"* | Full chain: Brain + Agent + Tool(s) + Variable(s) + Permission set |
+
+## The five wizard questions
+
+When a user makes a high-level build request (*"build me an AI that helps me run my Etsy store"*), ask these five questions in order, then build the whole chain in one bundled call.
+
+1. **What should it know?** → Brain name + description + routing_rules. If the user has existing data, offer to seed memories or import documents.
+2. **How should it behave?** → Core knowledge for non-negotiable rules (always active, cannot be overridden). Skills for style and process guidance.
+3. **What should it be able to do beyond chat?** → Serverless tools (JavaScript with fetch) for API calls. Each tool needs variables for credentials.
+4. **Who else needs to use it?** → Team brain + member invites with access levels. Consider parent brain for inheritance.
+5. **What data should flow in automatically?** → Connectors (gmail, webhook, etc.) + routes pointing at the target brain.
+
+If the user answers *"I don't know"* to any question, use sensible defaults (personal brain, no tools, no members, no connectors) and build a minimal agent. They can add complexity later.
+
+## Bundled create — the one-call pattern
+
+Use `manage(create_agent, ...)` with inline params to build everything atomically:
+
+```json
+{
+  "action": "create_agent",
+  "name": "Etsy Store Assistant",
+  "description": "Helps manage products, orders, and customer history",
+  "document_content": "You are the Etsy Store Assistant...",
+  "permission_set_id": "<from create_permission_set>",
+  "brain_ids": ["existing-policies-brain-id"],
+  "new_brain": {
+    "name": "Etsy Store",
+    "description": "Products, orders, customer preferences, shipping",
+    "routing_rules": "Product updates here. Customer complaints → Support Brain. Financial data → Finance Brain.",
+    "parent_brain_id": "ecommerce-parent-brain-id"
+  },
+  "new_tools": [
+    {"name": "etsy_orders", "code": "async function(args, env) { const r = await fetch('https://api.etsy.com/v3/...', {headers: {'x-api-key': env.ETSY_KEY}}); return await r.json(); }"}
+  ],
+  "new_variables": [
+    {"name": "ETSY_KEY", "value": "ask-the-user-for-this", "scope": "agent"}
+  ]
+}
+```
+
+**This creates everything atomically.** If any step fails, the whole call rolls back — no partial agent, no orphaned brain, no dangling API key. The response includes the agent_id, api_key (shown once), mcp_url, and details of everything created.
+
+For brains with seeded content:
+
+```json
+{
+  "action": "create_brain",
+  "name": "Customer Policies",
+  "description": "Return policies, shipping rules, FAQ answers",
+  "routing_rules": "Customer-facing policies here. Internal ops → Ops Brain.",
+  "seed_core_knowledge": [
+    {"section": "returns", "content": "30-day return window on all items. No returns on custom orders.", "visibility": "inherited"},
+    {"section": "shipping", "content": "Free shipping over $50. Standard 3-5 business days.", "visibility": "inherited"}
+  ],
+  "member_emails": [
+    {"email": "partner@example.com", "access_level": "editor"}
+  ]
+}
+```
+
+## Permission sets — reusable access bundles
+
+Before creating agents, create a permission set that defines what the agent can do:
+
+```json
+{
+  "action": "create_permission_set",
+  "name": "Customer Support Agent",
+  "description": "Read-only on product brain, write on support brain, Zendesk access",
+  "tool_permissions": {
+    "load_brain": true, "search_memory": true, "add_memory": true,
+    "log_session": true, "manage": false, "dashboard": false
+  },
+  "brain_scopes": [
+    {"brain_id": "products-brain-id", "access": "read"},
+    {"brain_id": "support-brain-id", "access": "write"}
+  ],
+  "variables": [{"name": "ZENDESK_TOKEN", "value": "..."}]
+}
+```
+
+Then assign it to agents via `permission_set_id` on `create_agent`. All agents with the same permission set share the same access pattern. Update the set once → all agents inherit the change on next session.
+
+Use `manage(list_permission_sets)` to see existing sets. `manage(update_permission_set, ...)` to modify. `manage(delete_permission_set, ...)` to remove.
+
+## The eight gotchas — pre-flight checklist
+
+Before declaring any build "done", run through these. Each one catches a common failure mode:
+
+1. **Agent without brain?** Every agent MUST have at least one brain. An agent without a brain has no memory, no skills, no core knowledge — it is a bare LLM.
+2. **Tool without variable?** If the tool code references `env.X`, the variable X must exist at the right scope. Check the warnings in the create response.
+3. **Variable at wrong scope?** Agent-scope is only visible to that agent. Brain-scope to agents on that brain. Org-scope to everyone. Put credentials at the LOWEST scope that reaches the tool.
+4. **Connector without routes?** A connector without routes drops incoming data silently. Every connector needs at least one route pointing to a brain.
+5. **Core knowledge on child, not parent?** Core knowledge with `visibility: inherited` cascades DOWN from parent to children. Put org-wide rules on the parent brain. Child-brain CK stays local.
+6. **Skill not assigned?** Skills attach to brains (inherited by all agents on that brain) or to agents directly. An unattached skill does nothing.
+7. **MCP relay status?** After adding an MCP connector, verify `mcp_status = connected` before assigning relay tools to agents. A broken connector gives agents broken tools.
+8. **Members vs agent permissions?** Inviting a member to a brain gives them brain access (memories, skills, CK). Agent tool permissions are separate — controlled by the permission set assigned to the agent.
+
+## Variable scope quick reference
+
+Variables inherit through four layers. Each layer overrides the one above.
+
+```
+org (company-wide)
+  └─ permission_set (role-level, shared across agents with this role)
+       └─ brain (brain-level, shared across agents on this brain)
+            └─ agent (this agent only — highest priority, wins all conflicts)
+```
+
+When creating variables via `new_variables`, the `scope` field is REQUIRED and determines which layer:
+- `"org"` → stored on the user, visible to all agents
+- `"permission_set"` → stored on the assigned role (requires `permission_set_id`)
+- `"brain"` → stored on the first assigned brain
+- `"agent"` → stored on the agent itself (most common for API keys)
 
 ## The philosophy in one line
 
