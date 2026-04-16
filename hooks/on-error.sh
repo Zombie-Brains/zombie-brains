@@ -1,39 +1,76 @@
 #!/usr/bin/env bash
-# Zombie Brains — On Error Hook (PostToolUseFailure)
-# When any tool fails, store the error + what was attempted as a critical memory.
-# This turns every mistake into institutional knowledge — "never again" memories.
+# Zombie Brains — PostToolUseFailure hook
+#
+# When a tool call fails, inject an add_memory directive — but only if the
+# failure is novel enough to be worth storing. Routine transients are
+# explicitly filtered out in the injection.
 
 set -euo pipefail
 
-API_KEY="${ZOMBIE_API_KEY:-}"
-API_URL="${ZOMBIE_API_URL:-https://mcp.zombie.codes}"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=./lib/inject.sh
+source "${HOOK_DIR}/lib/inject.sh"
 
-if [ -z "$API_KEY" ]; then
-  exit 0
-fi
-
-# Read hook input from stdin
 INPUT=$(cat)
 
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"' 2>/dev/null)
-TOOL_INPUT=$(echo "$INPUT" | jq -r '.tool_input | tostring' 2>/dev/null | head -c 500)
-ERROR=$(echo "$INPUT" | jq -r '.tool_response.text // .tool_response.stderr // .error // "unknown error"' 2>/dev/null | head -c 500)
+TOOL_NAME=$(printf '%s' "$INPUT" | python3 -c '
+import json, sys
+try:
+    d = json.loads(sys.stdin.read())
+    print(d.get("tool_name", "unknown"))
+except Exception:
+    print("unknown")
+' 2>/dev/null || echo "unknown")
 
-if [ "$ERROR" = "null" ] || [ -z "$ERROR" ]; then
+ERROR_MSG=$(printf '%s' "$INPUT" | python3 -c '
+import json, sys
+try:
+    d = json.loads(sys.stdin.read())
+    resp = d.get("tool_response") or {}
+    err = resp.get("stderr") or resp.get("text") or d.get("error") or ""
+    print(err[:500])
+except Exception:
+    pass
+' 2>/dev/null || echo "")
+
+if [ -z "$ERROR_MSG" ]; then
   exit 0
 fi
 
-SESSION_ID=$(cat /tmp/.zombie-session-id 2>/dev/null || echo "")
+zb_mark_pending "error" "${TOOL_NAME}: ${ERROR_MSG}"
 
-# Build error memory
-CONTENT="TOOL FAILURE — ${TOOL_NAME} failed. Attempted: ${TOOL_INPUT}. Error: ${ERROR}"
+emit_silent_protocol "TOOL FAILURE" "$(cat <<EOF
+A tool call just failed. Before you retry or work around it, HONESTLY
+assess whether this failure is worth storing as a memory.
 
-# Store as critical-salience memory
-curl -sf --max-time 8 \
-  -X POST "${API_URL}/v1/memory/add" \
-  -H "X-API-Key: ${API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d "$(jq -n --arg c "$CONTENT" --arg s "$SESSION_ID" '{content: $c, salience: "critical", session_id: $s}')" \
-  >/dev/null 2>&1 || true
+Tool: ${TOOL_NAME}
+Error (truncated to 500 chars): ${ERROR_MSG}
 
-exit 0
+Assessment:
+
+STORE IF the failure represents:
+  - A novel constraint discovered ("X does not work in this environment")
+  - A configuration mistake that will recur without a memory
+  - A misunderstanding of an API or tool that future sessions should avoid
+  - A reproducible bug or gotcha worth flagging to your future self
+
+SKIP IF the failure is:
+  - A routine transient (network blip, rate limit, lock contention)
+  - A typo Claude just made and will correct in the next turn
+  - An expected "does this exist?" probe that returned no
+  - A tool call that was obviously wrong on first read, where the fix
+    is already obvious and does not need to be remembered
+
+If you store, use type "feedback" framing — these are "never again"
+memories that should bias future decisions. Score the battery HONESTLY:
+genuine novel constraints score high on changes_future_approach and
+affects_multiple_areas; routine transients score low on everything. Do
+not inflate to make the failure look important — a routine flake that
+got stored with inflated scores corrupts the sense of what matters to
+the brain.
+
+After assessing (store or skip), fix the underlying issue or retry as
+you normally would. The memory operation is incidental to the actual
+fix — keep the response focused on solving the problem.
+EOF
+)"

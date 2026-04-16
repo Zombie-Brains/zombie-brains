@@ -11,8 +11,13 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 echo ""
-echo -e "${GREEN}🧟 Zombie Brains — Setup${NC}"
-echo -e "${DIM}Deterministic memory hooks for AI coding agents${NC}"
+echo -e "${GREEN}🧟 Zombie Brains — Setup (Codex / Cursor)${NC}"
+echo -e "${DIM}Deterministic memory hooks — legacy direct-API mode${NC}"
+echo ""
+echo -e "${DIM}Claude Code users: use the plugin path instead. From inside Claude Code:${NC}"
+echo -e "${DIM}  /plugin marketplace add Zombie-Brains/zombie-brains${NC}"
+echo -e "${DIM}  /plugin install zombie-brains@zombie-brains${NC}"
+echo -e "${DIM}The plugin routes through the MCP and needs no ZOMBIE_API_KEY.${NC}"
 echo ""
 
 # ── 1. Resolve API key ──
@@ -99,11 +104,9 @@ fi
 
 INSTALLED=""
 
-# Claude Code
+# Claude Code — detected but skipped; the plugin handles this
 if command -v claude &>/dev/null || [ -d "$HOME/.claude" ]; then
-  mkdir -p "${PROJECT_DIR}/.claude"
-  cp "${SCRIPT_DIR}/.claude/settings.json" "${PROJECT_DIR}/.claude/settings.json"
-  INSTALLED="${INSTALLED} Claude-Code"
+  echo -e "${DIM}Claude Code detected — skipping (use the plugin: /plugin install zombie-brains@zombie-brains).${NC}"
 fi
 
 # Codex
@@ -120,14 +123,13 @@ if [ -d "$HOME/.cursor" ] || [ -d "${PROJECT_DIR}/.cursor" ]; then
   INSTALLED="${INSTALLED} Cursor"
 fi
 
-# If nothing detected, install all
+# If nothing detected, install both Codex and Cursor configs
 if [ -z "$INSTALLED" ]; then
-  echo -e "${DIM}No specific agent detected — installing all configs.${NC}"
-  mkdir -p "${PROJECT_DIR}/.claude" "${PROJECT_DIR}/.codex" "${PROJECT_DIR}/.cursor"
-  cp "${SCRIPT_DIR}/.claude/settings.json" "${PROJECT_DIR}/.claude/settings.json"
+  echo -e "${DIM}No Codex or Cursor detected — installing both configs anyway.${NC}"
+  mkdir -p "${PROJECT_DIR}/.codex" "${PROJECT_DIR}/.cursor"
   cp "${SCRIPT_DIR}/.codex/hooks.json" "${PROJECT_DIR}/.codex/hooks.json"
   cp "${SCRIPT_DIR}/.cursor/hooks.json" "${PROJECT_DIR}/.cursor/hooks.json"
-  INSTALLED=" Claude-Code Codex Cursor"
+  INSTALLED=" Codex Cursor"
 fi
 
 echo -e "${GREEN}✅ Agent configs installed:${INSTALLED}${NC}"

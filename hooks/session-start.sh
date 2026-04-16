@@ -1,52 +1,60 @@
 #!/usr/bin/env bash
-# Zombie Brains — SessionStart Hook
-# Loads the brain and injects project context at the start of every Claude Code session.
-# This is the hook that makes "session 2 already knows session 1" work deterministically.
+# Zombie Brains — SessionStart hook
+#
+# Forces load_brain + session-summary reconciliation before any user-facing
+# response. No network calls — the MCP is Claude's job, this hook just tells
+# Claude to do it HONESTLY.
 
 set -euo pipefail
 
-API_KEY="${ZOMBIE_API_KEY:-}"
-API_URL="${ZOMBIE_API_URL:-https://mcp.zombie.codes}"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=./lib/inject.sh
+source "${HOOK_DIR}/lib/inject.sh"
 
-if [ -z "$API_KEY" ]; then
-  exit 0  # No key configured, skip silently
+# Drain any pending markers from previous session crashes / aborted stops.
+pending=$(zb_drain_pending || echo "")
+pending_block=""
+if [ -n "$pending" ]; then
+  pending_block="
+
+PREVIOUS SESSION PENDING EVENTS (crash recovery):
+The previous session ended before these events could be persisted. After
+load_brain completes, assess each one HONESTLY and call add_memory for any
+that are still meaningful. Events the brain already captured (e.g. via a
+later session) can be skipped.
+
+${pending}
+"
 fi
 
-# Load brain via REST API
-RESPONSE=$(curl -sf --max-time 8 \
-  -X POST "${API_URL}/v1/brain/load" \
-  -H "X-API-Key: ${API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{}' 2>/dev/null) || exit 0
+emit_silent_protocol "SESSION BOOTSTRAP" "$(cat <<EOF
+Your session is starting. Before you respond to the first user message
+please complete the following steps in order:
 
-# Extract key context for injection
-BRAIN_NAME=$(echo "$RESPONSE" | jq -r '.brain.name // "Unknown"' 2>/dev/null)
-SESSION_ID=$(echo "$RESPONSE" | jq -r '.current_session_id // ""' 2>/dev/null)
-RECENT=$(echo "$RESPONSE" | jq -r '[.recent_sessions[]? | select(.summary != null and .summary != "(no summary recorded)") | .summary] | .[0:3] | join("\n---\n")' 2>/dev/null)
-CRITICAL=$(echo "$RESPONSE" | jq -r '[.critical_memories[]? | .content] | .[0:5] | join("\n- ")' 2>/dev/null)
-BRAINS=$(echo "$RESPONSE" | jq -r '[.accessible_brains[]? | "\(.name) (\(.memory_count) memories)"] | join(", ")' 2>/dev/null)
+1. Call load_brain. This is your first tool call this session. Do not
+   respond to the user until load_brain has returned.
 
-# Build context injection
-CONTEXT="🧟 Zombie Brain loaded: ${BRAIN_NAME}
-Session: ${SESSION_ID}
-Brains: ${BRAINS}"
+2. HONESTLY read the full load_brain response — do not skim. Pay specific
+   attention to:
+     - critical_memories     (live facts, newest timestamp wins)
+     - recent_sessions[]     (frozen snapshots — treat as HISTORICAL)
+     - inherited_policies    (brain-level behavioral rules — follow them)
+     - accessible_brains     (for team-brain routing later this session)
 
-if [ -n "$RECENT" ] && [ "$RECENT" != "null" ]; then
-  CONTEXT="${CONTEXT}
+3. Cross-reference the most recent session_summary against
+   critical_memories BEFORE narrating any state to the user. For every
+   "NEXT ACTION", "OPEN", "NOT YET", "still need to", or equivalent item
+   in the summary, verify it is still open by checking for critical
+   memories dated AFTER the summary. Any item with a newer completion
+   memory is CLOSED, not open — do not list it as pending.
 
-Recent sessions:
-${RECENT}"
-fi
+4. If critical_memories and the session_summary disagree on ANY subject,
+   the critical_memories WIN. Always. The summary is a frozen snapshot
+   from before the newer memory existed. This is non-negotiable.${pending_block}
 
-if [ -n "$CRITICAL" ] && [ "$CRITICAL" != "null" ]; then
-  CONTEXT="${CONTEXT}
-
-Critical context:
-- ${CRITICAL}"
-fi
-
-# Store session ID for other hooks
-echo "$SESSION_ID" > /tmp/.zombie-session-id 2>/dev/null || true
-
-# Return additionalContext to inject into Claude's context
-echo "{\"additionalContext\": $(echo "$CONTEXT" | jq -Rs .)}"
+Once these steps are complete, respond to the user message normally.
+Keep the response focused on what the user asked for — a brief
+acknowledgment of loading prior context is fine where it reads
+naturally, but do not turn the response into a status report.
+EOF
+)"
