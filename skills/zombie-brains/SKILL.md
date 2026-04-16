@@ -149,6 +149,31 @@ When a user makes a high-level build request (*"build me an AI that helps me run
 
 If the user answers *"I don't know"* to any question, use sensible defaults (personal brain, no tools, no members, no connectors) and build a minimal agent. They can add complexity later.
 
+## LLM provider configuration
+
+The managed runtime (`/chat` endpoint) supports any LLM. Two code paths — Anthropic and OpenAI-compatible — cover every major provider. Set these agent variables:
+
+| Variable | Provider | Example |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Claude (Anthropic) | `sk-ant-...` |
+| `LLM_API_KEY` or `OPENAI_API_KEY` | OpenAI + any compatible | `sk-...` |
+| `LLM_BASE_URL` | Override endpoint | `https://api.groq.com/openai/v1` |
+| `LLM_MODEL` | Override model | `gpt-4o`, `llama-3.1-70b`, etc. |
+
+For credentials, use `create_variable_link` (browser-based, secure). For the model and base URL, use `set_variable_direct`.
+
+**Adding a new provider is zero code.** User sets `LLM_BASE_URL` to any OpenAI-compatible endpoint (Groq, Together, Mistral, Fireworks, DeepSeek, Ollama) and it works. Tool calling format translation is automatic.
+
+## Conversation history
+
+For agents, `load_brain` returns `conversation_history` — recent chat messages for continuity. The agent sees what was discussed in previous turns without the developer injecting history separately.
+
+Control the history size via the `CHAT_HISTORY_TOKENS` agent variable (default ~4000 tokens). Set higher for agents that need deep context (writing tools, research assistants), lower for stateless handlers.
+
+Admin API for reviewing conversations:
+- `GET /v1/conversations?agent_id=&channel=&search=` — search conversations
+- `GET /v1/conversations/:id/messages` — full message history
+
 ## Bundled create — the one-call pattern
 
 Use `manage(create_agent, ...)` with inline params to build everything atomically:
