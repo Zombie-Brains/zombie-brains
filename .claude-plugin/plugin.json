@@ -1,7 +1,7 @@
 {
   "name": "zombie-brains",
   "description": "Deterministic memory hooks for Claude Code. Every commit, error, and session turn is captured through the Zombie Brains MCP — not because Claude decided to remember, but because the hooks guarantee it.",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": {
     "name": "Zombie Brains",
     "url": "https://zombie.codes"
